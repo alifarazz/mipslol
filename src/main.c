@@ -19,6 +19,7 @@
 #define OPCODE_SW 0x0000002B
 #define OPCODE_RTYPE 0x00000000
 #define FUNC_ADD 0x00000020
+#define FUNC_AND 0x00000024
 #define FUNC_JR  0x00000008
 #define FUNC_NOR 0x00000027
 #define FUNC_OR  0x00000025
@@ -26,18 +27,6 @@
 #define FUNC_SUB 0x00000022
 #define FUNC_XOR 0x00000026
 
-int32_t g_regfile[32];
-int32_t g_instructions[MAXN];
-int8_t *g_mainmem;
-
-int32_t g_instructions_len;
-
-char g_char_buf[FILE_BUFFER_SIZE];
-
-/* enum Exceptions { */
-/*   int_overflow, */
-  
-/* }; */
 
 struct Context {
   int32_t *regfile;
@@ -51,7 +40,22 @@ union ConverterIntChar {
   int8_t c[4];
 };
 
-inline void
+/* enum Exceptions { */
+/*   int_overflow, */
+  
+/* }; */
+
+
+int32_t g_regfile[32];
+int32_t g_instructions[MAXN];
+int8_t *g_mainmem;
+
+int32_t g_instructions_len;
+
+char g_char_buf[FILE_BUFFER_SIZE];
+
+
+static inline void
 lol_update_context(struct Context *ctx,
 		   int32_t *regfile,
 		   int8_t *mainmem,
@@ -64,7 +68,8 @@ lol_update_context(struct Context *ctx,
   ctx->prog_counter = prog_counter;
 }
 
-void* lol_malloc(size_t length, size_t size)
+void*
+lol_malloc(size_t length, size_t size)
 {
   size_t x = length * size;
   if (length != 0 && x / length != size) { /* check for overflow */
@@ -97,9 +102,9 @@ convert_str_bin(const char *g_char_buf)
   return res;
 }
 
+/* return opcode zerofilled to 32 bits */
 int32_t
 lol_get_opcode(int32_t inst)
-/* return opcode zerofilled to 32 bits */
 {
   return (inst >> 26) & OPCODE_MASK;
 }
@@ -152,7 +157,7 @@ int
 lol_is_itype(int32_t inst)
 {
   int32_t opcode = lol_get_opcode(inst);
-  return opcode == OPCODE_LW || opcode == OPCODE_SW;
+  return (opcode == OPCODE_LW || opcode == OPCODE_SW);
 }
 
 int
@@ -162,19 +167,19 @@ lol_is_rtype(int32_t inst)
 }
 
 int
-lol_read_memory(const struct Context *ctx,
+lol_read_memory(const struct Context ctx,
 		const int32_t idx, int32_t *content)
 {
   union ConverterIntChar convert_ic;
-  if (!ctx || !(ctx->mainmem)) return -1;	      /* invalid context */
+  if (!(ctx.mainmem)) return -1;	      /* invalid context */
   if (!content) return -2;			      /* invalid content */
-  if (idx+3 >= ctx->mainmem_size) return 1;	      /* out of memeory */
+  if (idx+3 >= ctx.mainmem_size) return 1;	      /* out of memeory */
 
   /* Read 4 bytes from main memory and convert it to a 4 byte word */
-  convert_ic.c[0] = (ctx->mainmem)[idx];
-  convert_ic.c[1] = (ctx->mainmem)[idx + 1];
-  convert_ic.c[2] = (ctx->mainmem)[idx + 2];
-  convert_ic.c[3] = (ctx->mainmem)[idx + 3];
+  convert_ic.c[0] = (ctx.mainmem)[idx];
+  convert_ic.c[1] = (ctx.mainmem)[idx + 1];
+  convert_ic.c[2] = (ctx.mainmem)[idx + 2];
+  convert_ic.c[3] = (ctx.mainmem)[idx + 3];
   *content = convert_ic.i;
   return 0;
 }
@@ -200,14 +205,22 @@ lol_exec_jtype(int32_t inst, struct Context *ctx)
 {
   if (!ctx) return;		/* invalid context */
 
+  /* we don't need to shift the pc by 2 because the
+   * instructions are located at g_instructions and
+   * it's already 4 bytes aligned. */
   if (lol_get_opcode(inst) == OPCODE_J) {
-    /* get the address and shift by 2 */
-    inst = (inst & 0x03FFFFFFF) << 2;
-    /* keep 4 left-most bits of pc */
-    ctx->prog_counter = ctx->prog_counter & 0xF0000000;
-    /* update pc */
-    ctx->prog_counter |= inst;
+    /* printf("pc before mask: %x\n", ctx->prog_counter); */
+    inst ^= OPCODE_J << 26;	/* zero out opcode */
+    inst = inst & 0x03FFFFFF;	/* extract the new pc */
+    /* keep 3rd, 4th, 5th, 6th bits of pc (from MSB)
+    * zero out the rest */
+    ctx->prog_counter &= 0x3C000000;
+    ctx->prog_counter |= inst;	/* update pc */
+    /* printf("pc after mask: %x\n", ctx->prog_counter); */
+    return ;
   }
+  printf("jtype exec: instruction not implemented yet, pc = %0x\n", 
+	 ctx->prog_counter);
 }
 
 void
@@ -225,7 +238,8 @@ lol_exec_itype(int32_t inst, struct Context *ctx)
     case(OPCODE_LW): {
       /* Read 4 bytes from memory at location 
        * reg[rs] + imm and load it to reg[rt] */
-      lol_read_memory(ctx, (ctx->regfile)[rs] + imm, &((ctx->regfile)[rt]));
+      lol_read_memory(*ctx, (ctx->regfile)[rs] + imm, &((ctx->regfile)[rt]));
+      ctx->prog_counter++;
       break;
     }
     case(OPCODE_SW): {
@@ -233,14 +247,19 @@ lol_exec_itype(int32_t inst, struct Context *ctx)
        * 4 consecutive cells of memory located at
        * reg[rs] + imm */
       lol_write_memory(ctx, (ctx->regfile)[rs] + imm, (ctx->regfile)[rt]);
+      ctx->prog_counter++;
       break;
     }
     default:
+      ctx->prog_counter++;
       /* not implemented yet */
+      printf("itype exec: instruction not implemented yet, pc = %0x\n", 
+	     ctx->prog_counter);
       break;
     }
 }
 
+/* basically it's an ALU */
 void
 lol_exec_rtype(int32_t inst, struct Context *ctx)
 {
@@ -251,54 +270,101 @@ lol_exec_rtype(int32_t inst, struct Context *ctx)
 
   if (!ctx || !(ctx->regfile)) return;
 
+  /* printf("func: %x\n", func); */
   switch (func)
     {
     case(FUNC_ADD): {
       /* @TODO : handle int overflow */
       (ctx->regfile)[rd] = (ctx->regfile)[rs] + (ctx->regfile)[rt];
+      /* printf("$%i: %08x\n",  8, (ctx->regfile)[rd]); */
+      ctx->prog_counter++;
       break;
     }
     case(FUNC_JR): {
       ctx->prog_counter = (ctx->regfile)[rs];
       break;
     }
+    case(FUNC_AND): {
+      (ctx->regfile)[rd] = (ctx->regfile)[rs] & (ctx->regfile)[rt];
+      ctx->prog_counter++;
+      break;
+    }
     case(FUNC_NOR): {
       (ctx->regfile)[rd] = ~((ctx->regfile)[rs] | (ctx->regfile)[rt]);
+      ctx->prog_counter++;
       break;
     }
     case(FUNC_OR): {
+
       (ctx->regfile)[rd] = (ctx->regfile)[rs] | (ctx->regfile)[rt];
+      ctx->prog_counter++;
       break;
     }
     case(FUNC_SLT): {
       (ctx->regfile)[rd] = ((ctx->regfile)[rs] < (ctx->regfile)[rt]) ? 1:0;
+      ctx->prog_counter++;
       break;
     }
     case(FUNC_SUB): {
       /* @TODO : handle int overflow */
       (ctx->regfile)[rd] = (ctx->regfile)[rs] - (ctx->regfile)[rt];
+      ctx->prog_counter++;
       break;
     }
     case(FUNC_XOR): {
       (ctx->regfile)[rd] = (ctx->regfile)[rs] ^ (ctx->regfile)[rt];
+      ctx->prog_counter++;
       break;
     }
     default:
+      ctx->prog_counter++;
       /* not implemented yet */
+      printf("rtype exec: instruction not implemented yet, pc = %0x\n", 
+	     ctx->prog_counter);
       break;
     }
+}
+
+void
+lol_reg_dump(int idx, const struct Context ctx, FILE *fp)
+{
+  if (!(ctx.regfile)) return ;
+  if (idx > -1) {
+    fprintf(fp, "$%d: %08x\n",  idx, (ctx.regfile)[idx]);
+    return;
+  }
+
+  for (idx = 0; idx < 8 * (int)sizeof(int32_t); idx++)
+    fprintf(fp, "$%d: %08x\n",  idx, (ctx.regfile)[idx]);
+}
+
+void
+lol_mem_dump(int idx, const struct Context ctx, FILE *fp)
+{
+  int32_t foo;
+
+  if (!(ctx.regfile)) return ;
+  if (idx > -1)  {
+   lol_read_memory(ctx, idx, &foo);
+   fprintf(fp, "$%i: %08x\n",  idx/4, foo);
+   return;
+  }
+
+  for (idx = 0; idx < ctx.mainmem_size; idx+=4) {
+    lol_read_memory(ctx, idx, &foo);
+    fprintf(fp, "$%i: %08x\n",  idx/4, foo);
+  }
 }
 
 int main()
 {
   int i;
-  int32_t pc;
   FILE *fp;
   struct Context context;
 
   g_mainmem = lol_malloc(MAXMEM, sizeof(int8_t));
 
-  if ((fp = fopen("/home/luce/workspace/mipslol/src/ins.txt", "r")) == NULL) {
+  if ((fp = fopen("../ins.txt", "r")) == NULL) {
     perror("fopen() failed");
     goto exit_clean;
   }
@@ -314,16 +380,21 @@ int main()
   fclose(fp);
   g_instructions_len = i;
   
-  for (i = 0; i < g_instructions_len; i++) {
-    sprintf(g_char_buf, "%x", g_instructions[i]);
-    printf("%s\n", g_char_buf);
-  }
+  /* save interpreter context */
+  lol_update_context(&context, g_regfile, g_mainmem, MAXMEM, 0);
 
+  /* /\* init load the regfile *\/ */
+  /* (context.regfile)[0] = 0x0000000E; */
+  /* lol_exec_rtype(g_instructions[context.prog_counter], &context); */
+  /* printf("and %x\n", context.prog_counter); */
+  /* (context.regfile)[0] = 0xFFFFFFF1; */
+  /* lol_exec_rtype(g_instructions[context.prog_counter], &context); */
+  /* printf("and %x\n", context.prog_counter); */
+  /* (context.regfile)[0] = 4; */
 
-  pc = 0;
-  while (pc < g_instructions_len) {
-    int32_t instruction = g_instructions[pc];
-    lol_update_context(&context, g_regfile, g_mainmem, MAXMEM, pc);
+  while (context.prog_counter < g_instructions_len) {
+    int32_t instruction = g_instructions[context.prog_counter];
+    printf("inst: %08x\t", instruction);
 
     if (lol_is_jtype(instruction))
       lol_exec_jtype(instruction, &context);
@@ -333,16 +404,50 @@ int main()
       lol_exec_rtype(instruction, &context);
     else {
       fprintf(stderr,
-  	      "encounterd invalid instruction on line %d\ninstruction: 0x%x",
-  	      pc, instruction);
+    	      "encounterd invalid instruction on line "
+	      "%d\ninstruction: 0x%08x",
+    	      context.prog_counter, instruction);
       goto exit_clean;
-      }
+    }
+    /* printf("pc: %08x ", context.prog_counter); */
+    /* lol_reg_dump(9, context, stdout); */
+
+    /* printf("%08x\n", instruction); */
+    /* printf("\tis rtype %x\n", lol_is_rtype(instruction)); */
+    /* printf("\tis itype %x\n", lol_is_itype(instruction)); */
+    /* printf("\tis jtype %x\n", lol_is_jtype(instruction)); */
+    /* context.prog_counter++; */
 
     /* update variables from context */
-    pc = context.prog_counter;
   }
+
+  puts("\n");
+  lol_reg_dump(-1, context, stdout);
+
+  /* if ((fp = fopen("../regfile.txt", "w")) == NULL) { */
+  /*   perror("fopen() failed regfile."); */
+  /*   goto exit_clean; */
+  /* } */
+  /* lol_reg_dump(-1, context, fp); */
+  /* fclose(fp); */
+  /* if ((fp = fopen("../mainmem.txt", "w")) == NULL) { */
+  /*   perror("fopen() failed main memory"); */
+  /*   goto exit_clean; */
+  /* } */
+  /* lol_mem_dump(-1, context, fp); */
+  /* fclose(fp); */
+  
+  free(g_mainmem);
+  return EXIT_SUCCESS;
 
  exit_clean:
   free(g_mainmem);
-  return EXIT_SUCCESS;
+  return EXIT_FAILURE;
 }
+
+/* /\* display instructions *\/ */
+/*  for (i = 0; i < g_instructions_len; i++) { */
+/*     sprintf(g_char_buf, "%08x", g_instructions[i]); */
+/*     printf("%s", g_char_buf); */
+/*   }  */
+

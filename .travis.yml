@@ -32,11 +32,13 @@ before_script:
   - mkdir $PARENTDIR/build && cd $PARENTDIR/build
 
 script:
-  - cd $PARENTDIR/build
-  - cmake -DCMAKE_BUILD_TYPE=Coverage $PARENTDIR
-  - make
-  - make gtest
-  - make coverage
+  - cd $PARENTDI
+  - mkdir build
+  - meson build
+  - cd build
+  - ninja
+  # - ninja gtest
+  # - ninja coverage
 
 after_success:
   - cd $PARENTDIR/build
