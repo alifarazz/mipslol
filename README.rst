@@ -2,7 +2,7 @@ MIPSLOL
 ########################################
 A MIPS simulator with Lots Of Love :heart:
 
-It read MIPS instructions in binary form from ``ins.txt`` and executes them.
+It reads MIPS instructions in binary form from ``ins.txt`` and executes them.
 
 
 Dependencies
@@ -26,6 +26,7 @@ MIPSLOL's dependencies can be installed via `Homebrew <http://brew.sh/>`_
 
 Linux
 -----
+
 
 You need Clang or gcc, plus meson.
 
@@ -103,3 +104,4 @@ You know the drill:
 * commit
 * push
 * pull request
+
