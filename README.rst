@@ -1,6 +1,6 @@
 MIPSLOL
 ########################################
-A MIPS simulator with Lots Of Love :heart:.
+A MIPS simulator with Lots Of Love :heart:
 
 It read MIPS instructions in binary form from ``ins.txt`` and executes them.
 
