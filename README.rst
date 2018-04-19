@@ -27,6 +27,7 @@ MIPSLOL's dependencies can be installed via `Homebrew <http://brew.sh/>`_
 Linux
 -----
 
+
 You need Clang or gcc, plus meson.
 
 They can be installed using the system package manager, for example:
@@ -103,3 +104,4 @@ You know the drill:
 * commit
 * push
 * pull request
+
