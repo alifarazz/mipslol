@@ -11,6 +11,7 @@ Dependencies
 MIPSLOL needs meson build system and a sane C compiler.
 
 
+
 macOS
 -----
 
@@ -26,9 +27,7 @@ MIPSLOL's dependencies can be installed via `Homebrew <http://brew.sh/>`_
 Linux
 -----
 
-Most Linux distributions provide a package that can be installed using the
-system package manager, for example:
-You need Clang or gcc, plus the meson build system.
+You need Clang or gcc, plus menson.
 
 They can be installed using the system package manager, for example:
 
@@ -69,10 +68,13 @@ Compiling
 
 Go to the root of the project and run:
 
+
+
 .. code-block:: bash
-	$ meson build
-	$ cd build/
-	$ ninja
+
+    $ meson build
+    $ cd build/
+    $ ninja
 	
 
 
