@@ -6,7 +6,7 @@
 #define MAXN 1000
 #define MAXMEM 1000
 #define FILE_BUFFER_SIZE 1000
-
+#define INSTRUCTION_LOCATION "../ins.txt"
 
 #define OPCODE_MASK 0x0000003F
 #define FUNC_MASK 0x0000003F
@@ -17,6 +17,8 @@
 #define OPCODE_J 0x00000002
 #define OPCODE_LW 0x00000023
 #define OPCODE_SW 0x0000002B
+#define OPCODE_BNE 0x00000004
+#define OPCODE_BEQ 0x00000005
 #define OPCODE_RTYPE 0x00000000
 #define FUNC_ADD 0x00000020
 #define FUNC_AND 0x00000024
@@ -250,6 +252,28 @@ lol_exec_itype(int32_t inst, struct Context *ctx)
       ctx->prog_counter++;
       break;
     }
+    case(OPCODE_BEQ): {
+      /* TODO: handle int overflow */
+      if ((ctx->regfile)[rs] == (ctx->regfile)[rt]) {
+	/* if imm is a negative value 
+	 * branch backwards */
+	if (imm & 0x00008000)
+	  imm |= 0xFFFF0000;	    /* adjust sign to jump backward */
+	ctx->prog_counter += imm;   /* jump */
+      }
+      break;
+    }
+    case(OPCODE_BNE): {
+      /* same as beq */
+      if ((ctx->regfile)[rs] != (ctx->regfile)[rt]) {
+	/* if imm is a negative value 
+	 * branch backwards */
+	if (imm & 0x00008000)
+	  imm |= 0xFFFF0000;	    /* extend sign to jump backward */
+	ctx->prog_counter += imm;   /* jump */
+      }
+      break;
+    }
     default:
       ctx->prog_counter++;
       /* not implemented yet */
@@ -364,11 +388,10 @@ int main()
 
   g_mainmem = lol_malloc(MAXMEM, sizeof(int8_t));
 
-  if ((fp = fopen("../ins.txt", "r")) == NULL) {
+  if ((fp = fopen(INSTRUCTION_LOCATION, "r")) == NULL) {
     perror("fopen() failed");
     goto exit_clean;
   }
-
   for (i = 0; fgets(g_char_buf, FILE_BUFFER_SIZE, fp) != NULL;) {
     if (g_char_buf[0] == '#')	/* it's a comment */
       continue;
