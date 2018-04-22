@@ -178,10 +178,17 @@ lol_read_memory(const struct Context ctx,
   if (idx+3 >= ctx.mainmem_size) return 1;	      /* out of memeory */
 
   /* Read 4 bytes from main memory and convert it to a 4 byte word */
+#ifdef __BIG_ENDIAN__ 
   convert_ic.c[0] = (ctx.mainmem)[idx];
   convert_ic.c[1] = (ctx.mainmem)[idx + 1];
   convert_ic.c[2] = (ctx.mainmem)[idx + 2];
   convert_ic.c[3] = (ctx.mainmem)[idx + 3];
+#else
+  convert_ic.c[0] = (ctx.mainmem)[idx + 3];
+  convert_ic.c[1] = (ctx.mainmem)[idx + 2];
+  convert_ic.c[2] = (ctx.mainmem)[idx + 1];
+  convert_ic.c[3] = (ctx.mainmem)[idx];
+#endif
   *content = convert_ic.i;
   return 0;
 }
@@ -195,10 +202,17 @@ lol_write_memory(struct Context *ctx, int32_t idx, int32_t content)
 
   /* Write 'content' to 4 consecutive byte at main memory */
   convert_ic.i = content;
+#ifdef __BIG_ENDIAN__
   (ctx->mainmem)[idx]     = convert_ic.c[0];
   (ctx->mainmem)[idx + 1] = convert_ic.c[1];
   (ctx->mainmem)[idx + 2] = convert_ic.c[2];
   (ctx->mainmem)[idx + 3] = convert_ic.c[3];
+#else
+  (ctx->mainmem)[idx + 3] = convert_ic.c[0];
+  (ctx->mainmem)[idx + 2] = convert_ic.c[1];
+  (ctx->mainmem)[idx + 1] = convert_ic.c[2];
+  (ctx->mainmem)[idx]     = convert_ic.c[3];
+#endif
   return 0;
 }
 
@@ -406,18 +420,18 @@ int main()
   /* save interpreter context */
   lol_update_context(&context, g_regfile, g_mainmem, MAXMEM, 0);
 
-  /* /\* init load the regfile *\/ */
-  /* (context.regfile)[0] = 0x0000000E; */
-  /* lol_exec_rtype(g_instructions[context.prog_counter], &context); */
-  /* printf("and %x\n", context.prog_counter); */
-  /* (context.regfile)[0] = 0xFFFFFFF1; */
-  /* lol_exec_rtype(g_instructions[context.prog_counter], &context); */
-  /* printf("and %x\n", context.prog_counter); */
-  /* (context.regfile)[0] = 4; */
+  /* init load the regfile */
+  (context.regfile)[0] = 0x0000000E;
+  lol_exec_rtype(g_instructions[context.prog_counter], &context);
+  printf("and %x\n", context.prog_counter);
+  (context.regfile)[0] = 0xFFFFFFF1;
+  lol_exec_rtype(g_instructions[context.prog_counter], &context);
+  printf("and %x\n", context.prog_counter);
+  (context.regfile)[0] = 4;
 
   while (context.prog_counter < g_instructions_len) {
     int32_t instruction = g_instructions[context.prog_counter];
-    printf("inst: %08x\t", instruction);
+    printf("inst: 0x%08x\t", instruction); puts("");
 
     if (lol_is_jtype(instruction))
       lol_exec_jtype(instruction, &context);
