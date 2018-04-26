@@ -70,6 +70,7 @@ lol_update_context(struct Context *ctx,
   ctx->prog_counter = prog_counter;
 }
 
+/* my own "safe" malloc*/
 void*
 lol_malloc(size_t length, size_t size)
 {
@@ -90,6 +91,9 @@ lol_malloc(size_t length, size_t size)
   return mp;
 }
 
+/* for parsing input data.
+ * it takes a 32 byte char array  of '1' and '0' and converts them 
+ * into an int32_t. it assmues 32 bytes of memory, iterating over them */
 static int32_t
 convert_str_bin(const char *g_char_buf)
 {
@@ -156,13 +160,6 @@ lol_is_jtype(int32_t inst)
 }
 
 int
-lol_is_itype(int32_t inst)
-{
-  int32_t opcode = lol_get_opcode(inst);
-  return (opcode == OPCODE_LW || opcode == OPCODE_SW);
-}
-
-int
 lol_is_rtype(int32_t inst)
 {
   return lol_get_opcode(inst) == OPCODE_RTYPE;
@@ -216,6 +213,8 @@ lol_write_memory(struct Context *ctx, int32_t idx, int32_t content)
   return 0;
 }
 
+/* Executes jtype instruction, $inst must be jtype
+ * Use lol_is_jtype to determine if the instruction it's jtype  */
 void
 lol_exec_jtype(int32_t inst, struct Context *ctx)
 {
@@ -239,6 +238,9 @@ lol_exec_jtype(int32_t inst, struct Context *ctx)
 	 ctx->prog_counter);
 }
 
+/* Executes itype instruction, $inst must be itype 
+ * If lol_is_jtype and lol_is_rtype both return false,
+ * then the instruction is i-type */
 void
 lol_exec_itype(int32_t inst, struct Context *ctx)
 {
@@ -297,7 +299,7 @@ lol_exec_itype(int32_t inst, struct Context *ctx)
     }
 }
 
-/* basically it's an ALU */
+/* It's basically an ALU */
 void
 lol_exec_rtype(int32_t inst, struct Context *ctx)
 {
@@ -363,10 +365,12 @@ lol_exec_rtype(int32_t inst, struct Context *ctx)
     }
 }
 
+/* Dumps all registers if $idx == -1 
+ * else it dumps reg $idx to fp */
 void
 lol_reg_dump(int idx, const struct Context ctx, FILE *fp)
 {
-  if (!(ctx.regfile)) return ;
+  if (!(ctx.regfile) || idx > 31) return ;
   if (idx > -1) {
     fprintf(fp, "$%d: %08x\n",  idx, (ctx.regfile)[idx]);
     return;
@@ -376,6 +380,8 @@ lol_reg_dump(int idx, const struct Context ctx, FILE *fp)
     fprintf(fp, "$%d: %08x\n",  idx, (ctx.regfile)[idx]);
 }
 
+/* Dumps whole memory if $idx == -1 
+ * else it dumps mem $idx to fp */
 void
 lol_mem_dump(int idx, const struct Context ctx, FILE *fp)
 {
@@ -435,17 +441,11 @@ int main()
 
     if (lol_is_jtype(instruction))
       lol_exec_jtype(instruction, &context);
-    else if (lol_is_itype(instruction))
-      lol_exec_itype(instruction, &context);
     else if(lol_is_rtype(instruction))
       lol_exec_rtype(instruction, &context);
-    else {
-      fprintf(stderr,
-    	      "encounterd invalid instruction on line "
-	      "%d\ninstruction: 0x%08x",
-    	      context.prog_counter, instruction);
-      goto exit_clean;
-    }
+    else 
+      lol_exec_itype(instruction, &context);
+      
     /* printf("pc: %08x ", context.prog_counter); */
     /* lol_reg_dump(9, context, stdout); */
 
